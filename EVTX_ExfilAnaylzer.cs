@@ -1,24 +1,23 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Diagnostics;
 using System.Diagnostics.Eventing.Reader;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Xml;
-using System.Xml.Linq;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace LogHelper
 {
     public class EVTX_ExfilAnaylzer : EVTXAnaylzer
     {
+        const string hexChars = "0123456789abcdefABCDEF";
         public override bool CanDoAnaylsis(string path)
         {
             return Path.GetExtension(path)==".evtx";
         }
         private bool potentialExfilDetected=false;
-
+        private bool loggedPotentialEXFIL = false;
         public List<string> bytes = new List<string>();
+        string hexFileName = "unknown.hex";
+        string decodedFileName = "unknown";
+        bool foundCertutil = false;
+        string hexEncoded;
 
         public override void DoAnaylsis(FileStream stream)
         {
@@ -40,30 +39,68 @@ namespace LogHelper
                     if (sys.ChildNodes[1].InnerText != "1") continue;
                     string givenCommand = data.ChildNodes[4].InnerText;
 
+                    XmlNode execNode = data.ChildNodes[10];
+                    string command = execNode.InnerText;
                     //TODO: look for certutil.
-
+                    if(givenCommand== "C:\\Windows\\System32\\certutil.exe")
+                    {
+                        if (!command.Contains("encodehex")) continue;
+                        foundCertutil = true;
+                        Logger.Log("Found certutil encode hex execution. ");
+                        string[] cmd=command.Split(' ');
+                        hexFileName = cmd[3];
+                        decodedFileName = cmd[2].Replace("/","");
+                        hexEncoded = cmd[4];
+                    }
 
                     if (givenCommand == "C:\\Windows\\System32\\nslookup.exe")
                     {
-                        if (data.ChildNodes.Count < 17) continue;
 
-                        string bytes = data.ChildNodes[10].InnerText.Replace("\"C:\\Windows\\system32\\nslookup.exe\" ", "").Replace(".cityinthe.cloud 10.0.2.5", "");
+                        string line = command.Replace("\"C:\\Windows\\system32\\nslookup.exe\" ", "").Replace(".cityinthe.cloud 10.0.2.5", "");
+
                         //TODO: if we see these are hex codes and not normal subdomains, flag potential exfil.
-                            //Then add suspect bytes to list.
+                        //Then add suspect bytes to list.
+                        if (line.All(hexChars.Contains))
+                        {
+                            Logger.Log("Detected potential dns exfil.", condition: !loggedPotentialEXFIL);
+                            loggedPotentialEXFIL = true;
+                            bytes.Add(line);
+                            potentialExfilDetected = true;
+                        }
+                       
                     };
-                    
-                    
-                   
-                    
-                    // Console.WriteLine(bytes);
-                    //writer.WriteLine(bytes);
-                    //lines.Add(bytes);
-                    // string givenCommand = root.ChildNodes[4].InnerText;
-                    //
-                    // if (givenCommand != "C:\\Windows\\System32\\nslookup.exe") continue;
-                    // Console.WriteLine(givenCommand);
-                    //TODO: Filter out system as a user- this will reduce processing time.
-                    // Console.WriteLine("{0} {1}: {2}", record.TimeCreated, record.LevelDisplayName, record.FormatDescription());
+                }
+            }
+            if (potentialExfilDetected)
+            {
+                string path = Program.LogHelperPath;
+                string filePath = Path.Combine(path, hexFileName);
+                filePath = filePath.Replace("\\", "/");
+                StreamWriter writer = new StreamWriter(filePath);
+                Logger.Log($"Wrote hex values to {filePath}");
+                foreach (string b in bytes)
+                {
+                    writer.WriteLine(b);
+                }
+                writer.Close();
+                if(foundCertutil)
+                {
+                    try
+                    {
+                        Process process = new Process();
+                        ProcessStartInfo info = new ProcessStartInfo(Environment.ExpandEnvironmentVariables("%SystemRoot%") + @"\System32\certutil.exe", $"/C -decodehex {filePath} {Path.Combine(path, decodedFileName)} {hexEncoded}");
+                        info.Verb = "runas";
+                        info.CreateNoWindow = true;
+                        info.UseShellExecute = true;
+                        process.StartInfo = info;
+                        
+
+                        process.Start();
+                    }catch(Exception ex)
+                    {
+                        Logger.Log($"Certutil failed: {ex}");
+                        Logger.Log($"Please try this command manually: certutil -decodehex {filePath} {Path.Combine(path, decodedFileName)} {hexEncoded}");
+                    }
                 }
             }
         }

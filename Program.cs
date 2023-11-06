@@ -1,10 +1,21 @@
 ﻿// See https://aka.ms/new-console-template for more information
 using LogHelper;
+using System.IO;
 using System.Reflection;
 
 internal class Program
 {
     private static bool autoMode = true;
+
+    public static string LogHelperPath
+    {
+        get
+        {
+            string res = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "LogHelper/");
+            if (!Directory.Exists(res)) Directory.CreateDirectory(res);
+            return res;
+        }
+    }
     private static void Main(string[] args)
     {
         Console.WriteLine("Hello, World!");

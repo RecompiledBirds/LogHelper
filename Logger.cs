@@ -21,8 +21,9 @@ namespace LogHelper
             get { return debugMode; }
             set { debugMode=value; }
         }
-        public static void Log(string message, LogType logType=LogType.Message,bool debug = false)
+        public static void Log(string message, LogType logType=LogType.Message,bool condition=true,bool debug = false)
         {
+            if (!condition) return;
             if (logType == LogType.Debug && !debug) return;
             Console.WriteLine(message);
         }
