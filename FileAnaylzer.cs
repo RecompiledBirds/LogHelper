@@ -11,6 +11,9 @@ namespace LogHelper
         public abstract bool CanDoAnaylsis(string path);
         public abstract string Name();
 
+        public abstract bool FoundPotentialData();
         public abstract void DoAnaylsis(FileStream stream);
+
+        public abstract void DisplayData();
     }
 }

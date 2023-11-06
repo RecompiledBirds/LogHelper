@@ -20,9 +20,9 @@ internal class Program
     {
         Console.WriteLine("Hello, World!");
         Console.WriteLine("Full automatic mode?");
-        Logger.Log("Full automatic mode will attempt to identify log types itself.)");
+        Logger.Log("- Full automatic mode will attempt to identify log types itself, with no input");
         if (!Logger.GetYNInput("")) autoMode = false;
-        Logger.GetYNInput("Read entire directory of LogFiles?");
+        Logger.GetYNInput("Read entire directory of log files?");
         Console.WriteLine("File path to read from:");
         string path = Console.ReadLine().Replace("\"", "");
         ReadFile(path);
@@ -86,11 +86,26 @@ internal class Program
                 }
             }
             Logger.Log($"Built {anaylzers.Count} EVTX anaylzers.");
+            List<EVTXAnaylzer> anaylzersFoundData = new List<EVTXAnaylzer>();
             foreach(EVTXAnaylzer anaylzer in anaylzers)
             {
                 Logger.Log($"Running analysis: {anaylzer.Name()}");
 
                 anaylzer.DoAnaylsis(stream);
+                if (anaylzer.FoundPotentialData())
+                {
+                    anaylzersFoundData.Add(anaylzer);
+                }
+               // Logger.Log($"{anaylzer.Name()} found potentially interesting data!", condition: anaylzer.FoundPotentialData());
+            }
+
+            Logger.Log($"Found {anaylzersFoundData.Count} results.");
+
+            foreach(EVTXAnaylzer anaylzer in anaylzersFoundData)
+            {
+                Logger.Log("");
+                Logger.Log($"=========={anaylzer.Name()}==========");
+                anaylzer.DisplayData();
             }
         }
         if (fileType == FileType.KML)

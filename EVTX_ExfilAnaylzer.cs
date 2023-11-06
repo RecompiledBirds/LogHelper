@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Diagnostics.Eventing.Reader;
+using System.IO;
 using System.Xml;
 
 namespace LogHelper
@@ -18,7 +19,7 @@ namespace LogHelper
         string decodedFileName = "unknown";
         bool foundCertutil = false;
         string hexEncoded;
-
+        string exfilDomain = "unknown";
         public override void DoAnaylsis(FileStream stream)
         {
             EventLogReader reader = new EventLogReader(stream.Name,PathType.FilePath);
@@ -46,7 +47,7 @@ namespace LogHelper
                     {
                         if (!command.Contains("encodehex")) continue;
                         foundCertutil = true;
-                        Logger.Log("Found certutil encode hex execution. ");
+                      //  Logger.Log("Found certutil encode hex execution. ");
                         string[] cmd=command.Split(' ');
                         hexFileName = cmd[3].Replace("\\","");
                         decodedFileName = cmd[2].Replace("\\","");
@@ -58,6 +59,10 @@ namespace LogHelper
 
                         string line = command.Replace("\"C:\\Windows\\system32\\nslookup.exe\" ", "");
                         int index = line.IndexOf(".");
+                        if (exfilDomain == "unknown")
+                        {
+                            exfilDomain = line.Substring(index+1);
+                        }
                         if(index>0)
                             line = line.Remove(line.IndexOf("."));
                
@@ -66,7 +71,7 @@ namespace LogHelper
                         //Then add suspect bytes to list.
                         if (line.All(hexChars.Contains))
                         {
-                            Logger.Log("Detected potential dns exfil.", condition: !loggedPotentialEXFIL);
+                            //Logger.Log("Detected potential dns exfil.", condition: !loggedPotentialEXFIL);
                             loggedPotentialEXFIL = true;
                             bytes.Add(line);
                             potentialExfilDetected = true;
@@ -81,7 +86,7 @@ namespace LogHelper
                 string filePath = Path.Combine(path, hexFileName);
                 filePath = filePath.Replace("\\", "/");
                 StreamWriter writer = new StreamWriter(filePath);
-                Logger.Log($"Wrote hex values to {filePath}");
+               // Logger.Log($"Wrote hex values to {filePath}");
                 foreach (string b in bytes)
                 {
                     writer.WriteLine(b);
@@ -99,11 +104,11 @@ namespace LogHelper
                         Process process = new Process();
                         ProcessStartInfo info = new ProcessStartInfo(Environment.ExpandEnvironmentVariables("%SystemRoot%") + @"\System32\certutil.exe", $"-decodehex {filePath} {decodedPath} {hexEncoded}");
                         info.CreateNoWindow = false;
-                        info.UseShellExecute = false;
+                        info.UseShellExecute = true;
                         process.StartInfo = info;
 
                         process.Start();
-                       // Logger.Log($"Please try this command manually: certutil -decodehex {filePath} {Path.Combine(path, decodedFileName)} {hexEncoded}");
+                      //  Logger.Log($"Decoded from hex file to {decodedPath}");
                     }catch(Exception ex)
                     {
                         Logger.Log($"Certutil failed: {ex}");
@@ -116,6 +121,24 @@ namespace LogHelper
         public override string Name()
         {
             return "EVTX_EXFIL_ANAYLSIS";
+        }
+
+        public override bool FoundPotentialData()
+        {
+            return potentialExfilDetected;
+        }
+
+        public override void DisplayData()
+        {
+            if (!potentialExfilDetected) return;
+            Logger.Log($"Found potential DNS exfil to {exfilDomain}");
+            string filePath = Path.Combine(Program.LogHelperPath, hexFileName);
+            filePath = filePath.Replace("\\", "/");
+            Logger.Log($"Wrote HEX data from potential exfil to {filePath}");
+            Logger.Log("Found CERTUTIL encoding to hex!",condition:foundCertutil);
+            if (!foundCertutil) return;
+            string decodedPath = Path.Combine(Program.LogHelperPath, decodedFileName);
+            Logger.Log($"Decoded from hex file to {decodedPath}");
         }
     }
 }
