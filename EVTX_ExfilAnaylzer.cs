@@ -48,15 +48,19 @@ namespace LogHelper
                         foundCertutil = true;
                         Logger.Log("Found certutil encode hex execution. ");
                         string[] cmd=command.Split(' ');
-                        hexFileName = cmd[3];
-                        decodedFileName = cmd[2].Replace("/","");
+                        hexFileName = cmd[3].Replace("\\","");
+                        decodedFileName = cmd[2].Replace("\\","");
                         hexEncoded = cmd[4];
                     }
 
                     if (givenCommand == "C:\\Windows\\System32\\nslookup.exe")
                     {
 
-                        string line = command.Replace("\"C:\\Windows\\system32\\nslookup.exe\" ", "").Replace(".cityinthe.cloud 10.0.2.5", "");
+                        string line = command.Replace("\"C:\\Windows\\system32\\nslookup.exe\" ", "");
+                        int index = line.IndexOf(".");
+                        if(index>0)
+                            line = line.Remove(line.IndexOf("."));
+               
 
                         //TODO: if we see these are hex codes and not normal subdomains, flag potential exfil.
                         //Then add suspect bytes to list.
@@ -87,15 +91,19 @@ namespace LogHelper
                 {
                     try
                     {
+                        string decodedPath = Path.Combine(path, decodedFileName);
+                        if(File.Exists(decodedPath))
+                        {
+                            File.Delete(decodedPath);
+                        }
                         Process process = new Process();
-                        ProcessStartInfo info = new ProcessStartInfo(Environment.ExpandEnvironmentVariables("%SystemRoot%") + @"\System32\certutil.exe", $"/C -decodehex {filePath} {Path.Combine(path, decodedFileName)} {hexEncoded}");
-                        info.Verb = "runas";
-                        info.CreateNoWindow = true;
-                        info.UseShellExecute = true;
+                        ProcessStartInfo info = new ProcessStartInfo(Environment.ExpandEnvironmentVariables("%SystemRoot%") + @"\System32\certutil.exe", $"-decodehex {filePath} {decodedPath} {hexEncoded}");
+                        info.CreateNoWindow = false;
+                        info.UseShellExecute = false;
                         process.StartInfo = info;
-                        
 
                         process.Start();
+                       // Logger.Log($"Please try this command manually: certutil -decodehex {filePath} {Path.Combine(path, decodedFileName)} {hexEncoded}");
                     }catch(Exception ex)
                     {
                         Logger.Log($"Certutil failed: {ex}");
