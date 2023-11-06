@@ -135,7 +135,7 @@ namespace LogHelper
             string filePath = Path.Combine(Program.LogHelperPath, hexFileName);
             filePath = filePath.Replace("\\", "/");
             Logger.Log($"Wrote HEX data from potential exfil to {filePath}");
-            Logger.Log("Found CERTUTIL encoding to hex!",condition:foundCertutil);
+            Logger.Log("Found CERTUTIL encoding to hex, ran decode.",condition:foundCertutil);
             if (!foundCertutil) return;
             string decodedPath = Path.Combine(Program.LogHelperPath, decodedFileName);
             Logger.Log($"Decoded from hex file to {decodedPath}");
