@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Diagnostics.Eventing.Reader;
 using System.IO;
+using System.Reflection.Metadata.Ecma335;
 using System.Xml;
 
 namespace LogHelper
@@ -13,16 +14,15 @@ namespace LogHelper
             return Path.GetExtension(path)==".evtx";
         }
         private bool potentialExfilDetected=false;
-        private bool loggedPotentialEXFIL = false;
         public List<string> bytes = new List<string>();
         string hexFileName = "unknown.hex";
         string decodedFileName = "unknown";
         bool foundCertutil = false;
-        string hexEncoded;
+        string? hexEncoded;
         string exfilDomain = "unknown";
         public override void DoAnaylsis(FileStream stream)
         {
-            EventLogReader reader = new EventLogReader(stream.Name,PathType.FilePath);
+            EventLogReader reader = new EventLogReader(stream.Name, PathType.FilePath);
 
             EventRecord record;
             while ((record = reader.ReadEvent()) != null)
@@ -33,14 +33,24 @@ namespace LogHelper
                     //so we're only looking at event ID 1 events.
                     if (record.Id != 1) continue;
                     XmlDocument doc= new XmlDocument();
+
                     doc.LoadXml(record.ToXml());
-                    XmlNode root = doc.DocumentElement;
-                    XmlNode sys = root.ChildNodes[0];
-                    XmlNode data = root.ChildNodes[1];
-                    if (sys.ChildNodes[1].InnerText != "1") continue;
+                    if (doc == null) continue;
+                    XmlNode? root = doc.DocumentElement;
+                    if (root == null) continue;
+                    if (root.ChildNodes == null) continue;
+                    XmlNode? sys = root.ChildNodes[0];
+                    
+                    if(sys == null) continue;
+                    if (sys.ChildNodes == null) continue;
+                   
+                    XmlNode? data = root.ChildNodes[1];
+                    if(data==null)continue;
+                    if (sys.ChildNodes[1]?.InnerText != "1") continue;
+                    if (data.ChildNodes == null) continue;
                     string givenCommand = data.ChildNodes[4].InnerText;
 
-                    XmlNode execNode = data.ChildNodes[10];
+                    XmlNode? execNode = data.ChildNodes[10];
                     string command = execNode.InnerText;
                     //TODO: look for certutil.
                     if(givenCommand== "C:\\Windows\\System32\\certutil.exe")
@@ -61,7 +71,7 @@ namespace LogHelper
                         int index = line.IndexOf(".");
                         if (exfilDomain == "unknown")
                         {
-                            exfilDomain = line.Substring(index+1);
+                            exfilDomain = line[(index + 1)..];
                         }
                         if(index>0)
                             line = line.Remove(line.IndexOf("."));
@@ -72,7 +82,6 @@ namespace LogHelper
                         if (line.All(hexChars.Contains))
                         {
                             //Logger.Log("Detected potential dns exfil.", condition: !loggedPotentialEXFIL);
-                            loggedPotentialEXFIL = true;
                             bytes.Add(line);
                             potentialExfilDetected = true;
                         }
@@ -101,10 +110,12 @@ namespace LogHelper
                         {
                             File.Delete(decodedPath);
                         }
-                        Process process = new Process();
-                        ProcessStartInfo info = new ProcessStartInfo(Environment.ExpandEnvironmentVariables("%SystemRoot%") + @"\System32\certutil.exe", $"-decodehex {filePath} {decodedPath} {hexEncoded}");
-                        info.CreateNoWindow = false;
-                        info.UseShellExecute = true;
+                        Process process = new();
+                        ProcessStartInfo info = new(Environment.ExpandEnvironmentVariables("%SystemRoot%") + @"\System32\certutil.exe", $"-decodehex {filePath} {decodedPath} {hexEncoded}")
+                        {
+                            CreateNoWindow = false,
+                            UseShellExecute = true
+                        };
                         process.StartInfo = info;
 
                         process.Start();
@@ -130,7 +141,11 @@ namespace LogHelper
 
         public override void DisplayData()
         {
-            if (!potentialExfilDetected) return;
+            if (!potentialExfilDetected)
+            {
+                Logger.Log("No exfil noticed.");
+                return;
+            };
             Logger.Log($"Found potential DNS exfil to {exfilDomain}");
             string filePath = Path.Combine(Program.LogHelperPath, hexFileName);
             filePath = filePath.Replace("\\", "/");

@@ -11,6 +11,7 @@ namespace LogHelper
         XML,
         EVTX,
         KML,
+        LOG,
         OTHER
     }
 
@@ -19,10 +20,23 @@ namespace LogHelper
         public static FileType GetFileType(string extension)
         {
             extension = extension.Replace(".", "").ToLower();
-            if(extension == "xml")return FileType.XML;
-            if(extension =="evtx")return FileType.EVTX;
-            if (extension == "kml") return FileType.KML;
-            return FileType.OTHER;
+            FileType res = FileType.OTHER;
+            switch (extension)
+            {
+                case "xml":
+                    res= FileType.XML;
+                    break;
+                case "evtx":
+                    res= FileType.EVTX;
+                    break;
+                case "kml":
+                    res= FileType.KML;
+                    break;
+                case "log":
+                    res=FileType.LOG;
+                    break;
+            }
+            return res;
         }
     }
 }
